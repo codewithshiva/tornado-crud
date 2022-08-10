@@ -14,10 +14,10 @@ async def get_config():
 
 PG_CONFIG = {
     'user': 'postgres',
-    'pass': '123456',
+    'pass': '12345',
     'host': 'localhost',
-    'database': 'formpg',
-    'port': '5433'
+    'database': 'postgres',
+    'port': '5432'
 }
 PG_CONFIG['dsn'] = "postgres://%s:%s@%s:%s/%s" % (PG_CONFIG['user'], PG_CONFIG['pass'],
                                                   PG_CONFIG['host'], PG_CONFIG['port'], PG_CONFIG['database'])
@@ -25,11 +25,21 @@ PG_CONFIG['dsn'] = "postgres://%s:%s@%s:%s/%s" % (PG_CONFIG['user'], PG_CONFIG['
 # class basicRequestHandler(tornado.web.RequestHandler):
 #     def get(self):
 #         self.write("Hello,world !!!!!!")
+new = '''
+    CREATE TABLE employee1(
+        firstName varchar(255),  
+        lastName varchar(255),  
+        email varchar(255),  
+        city varchar(255)  
+    );'''
 
 class staticRequestHandler(tornado.web.RequestHandler):
-    def get(self):
+    async def get(self):
         print(self.settings['template_path'])
         self.render("index.html")
+        async with self.settings['pool'].acquire() as connection:    
+            async with connection.transaction():
+                await connection.execute(new)
     
 class formRequestHandler(tornado.web.RequestHandler):
     async def post(self):
@@ -38,8 +48,7 @@ class formRequestHandler(tornado.web.RequestHandler):
         lastname = self.get_body_argument("lastname")
         email = self.get_body_argument("email")
         city = self.get_body_argument("city")
-    
-        
+
         async with self.settings['pool'].acquire() as connection:    
             async with connection.transaction():
                 update = '''
@@ -65,14 +74,7 @@ class resultRequestHandler(tornado.web.RequestHandler):
 #     print(PG_CONFIG['dsn'])
 #     async with self.settings['pool'].acquire() as connection:
 #         async with connection.transaction():
-#             new = '''
-#                 CREATE TABLE employee1(
-#                     firstName varchar(255),  
-#                     lastName varchar(255),  
-#                     email varchar(255),  
-#                     city varchar(255)  
-#                 );'''
-#             await connection.execute(new)
+
             
 
 if __name__ == "__main__":
