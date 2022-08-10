@@ -4,10 +4,13 @@ import os
 import asyncpg
 import asyncio
 
-settings = {
-    "template_path": os.path.join(os.path.dirname(__file__), "templates"),
-    "static_path": os.path.join(os.path.dirname(__file__), "static")   
-}
+async def get_config():
+    settings = {
+        "template_path": os.path.join(os.path.dirname(__file__), "templates"),
+        "static_path": os.path.join(os.path.dirname(__file__), "static"),
+        "pool": await asyncpg.create_pool(PG_CONFIG['dsn'])
+    }
+    return settings
 
 PG_CONFIG = {
     'user': 'postgres',
@@ -25,6 +28,7 @@ PG_CONFIG['dsn'] = "postgres://%s:%s@%s:%s/%s" % (PG_CONFIG['user'], PG_CONFIG['
 
 class staticRequestHandler(tornado.web.RequestHandler):
     def get(self):
+        print(self.settings['template_path'])
         self.render("index.html")
     
 class formRequestHandler(tornado.web.RequestHandler):
@@ -35,8 +39,8 @@ class formRequestHandler(tornado.web.RequestHandler):
         email = self.get_body_argument("email")
         city = self.get_body_argument("city")
     
-        pool = await asyncpg.create_pool(PG_CONFIG['dsn'])
-        async with pool.acquire() as connection:    
+        
+        async with self.settings['pool'].acquire() as connection:    
             async with connection.transaction():
                 update = '''
                         INSERT INTO employee1(firstname, lastname, email, city)  
@@ -51,8 +55,7 @@ class resultRequestHandler(tornado.web.RequestHandler):
         if action is None:
             self.render("result.html")
         elif action == 'fetch_result':
-            pool = await asyncpg.create_pool(PG_CONFIG['dsn'])
-            async with pool.acquire() as connection: 
+            async with self.settings['pool'].acquire() as connection: 
                 rows = await connection.fetch("SELECT * FROM employee1")
                 data = [dict(row) for row in rows]
                 data = tornado.web.escape.json_encode(data)
@@ -60,8 +63,7 @@ class resultRequestHandler(tornado.web.RequestHandler):
             
 # async def main():
 #     print(PG_CONFIG['dsn'])
-#     pool = await asyncpg.create_pool(PG_CONFIG['dsn'])
-#     async with pool.acquire() as connection:
+#     async with self.settings['pool'].acquire() as connection:
 #         async with connection.transaction():
 #             new = '''
 #                 CREATE TABLE employee1(
@@ -74,13 +76,14 @@ class resultRequestHandler(tornado.web.RequestHandler):
             
 
 if __name__ == "__main__":
+    config = tornado.ioloop.IOLoop.current().run_sync(get_config)
     app = tornado.web.Application([
         # (r"/hello",basicRequestHandler),
         (r"/",staticRequestHandler),
         (r"/form",formRequestHandler),
         (r"/result",resultRequestHandler)
         
-    ], **settings)
+    ], **config)
     app.listen(8888)
     print("I'm listening on port 8888")
     # loop = asyncio.get_event_loop()
